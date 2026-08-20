@@ -1,5 +1,7 @@
 'use server';
 
+import { signIn } from '@/auth';
+import { AuthError } from 'next-auth';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -10,7 +12,7 @@ const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 const FormSchema = z.object({
   id: z.string(),
   customerId: z.string({
-     invalid_type_error: 'Please select a customer.',
+    invalid_type_error: 'Please select a customer.',
   }),
   amount: z.coerce
     .number()
@@ -108,4 +110,23 @@ export async function updateInvoice(id: string, prevState: State, formData: Form
 export async function deleteInvoice(id: string) {
   await sql`DELETE FROM invoices WHERE id = ${id}`;
   revalidatePath('/dashboard/invoices');
+}
+
+export async function authenticate(
+  prevState: string | undefined,
+  formData: FormData,
+) {
+  try {
+    await signIn('credentials', formData);
+  } catch (error) {
+    if (error instanceof AuthError) {
+      switch (error.type) {
+        case 'CredentialsSignin':
+          return 'Invalid email or password. Please try again.';
+        default:
+          return 'An unexpected error occurred. Please try again later.';
+      }
+    }
+    throw error; // Re-throw if it's not an AuthError
+  }
 }
